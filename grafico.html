@@ -10,16 +10,23 @@
   stroke: #fff;
 }
 
-#svgMain {margin-left:auto; margin-right:auto; display:block;}
-
+#svgMain {margin-left:auto; margin-right:auto; display:block;overflow: hidden;}
+#logo {
+  position:absolute;
+  top:40px;
+  right:40px;
+  height:120px;
+  opacity:0.7;
+}
 </style>
 <body>
 
     <center><div id="svgMain"></div></center>
+    <img id="logo" src="logo.png" />
 <script src="//d3js.org/d3.v3.min.js"></script>
 <script>
 
-var width = window.innerWidth,
+var width = window.innerWidth;
     height = window.innerHeight;
 
 var svg = d3.select("#svgMain").append("svg")
@@ -28,42 +35,70 @@ var svg = d3.select("#svgMain").append("svg")
 
 var force = d3.layout.force()
     .size([width, height])
-    .charge(-500)
-    .linkDistance(120);
+    .charge(function (d) {
+        if (d.type == 'people' && d.count==1) {
+            return -500
+        }
+        else {
+          return -4000
+        }
+    })
+    .linkDistance(function (d) {
+        if (d.source.type == 'people' && d.source.count > 1) {
+            return 80
+        }
+        else {
+          return 40
+        }
+    });
 
 
-d3.csv("data.csv", function(error, links) {
+var colors = ['#13aa41','#4bc87c','#1d56aa','#4aafc8','#5ed2b5']
+var categories = ["Gestão do Conhecimento","Mobilização e Formação","Água e Saneamento","Florestas Uc e Agroecologia","Ambiente Urbano"]
+
+function getColor(category) {
+  return colors[categories.indexOf(category)]
+}
+
+var url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSS22J-rJe3-4QbjEtie4hSZiPoKGHkjr9e48LzZtoMJjeNytTlM84GDsNzW4hz5cu-blMkHgmi6N-U/pub?gid=780997493&single=true&output=csv"
+d3.csv(url+'&' + Math.floor(Math.random() * 1000), function(error, people) {
   if (error) throw error;
 
+  var links = []
   var nodesByName = {};
-    console.log(links)
+
   // Create nodes for each unique source and target.
+  people.forEach(function(link) {
+    link.GTs.split(",").forEach(function (gt) {
+      links.push({
+        'source' : link["Nome Completo"],
+        'target' : gt.trim() 
+      });
+    });
+  });
+
   links.forEach(function(link) {
     link.source = nodeByName(link.source, type='people');
     link.target = nodeByName(link.target, type='group');
   });
-
-  console.log(nodesByName)
-  
-  
-  var color = {
-      "GT Saneamento" : "#40bfc1",
-      "GT Mobilização" : "#f5f0e3",
-      "GT Coordenação" : "#ff6f5e",
-      "GT Cidade" : "#f0134d"
-  }
-  
-  
-  
   // Extract the array of nodes from the map by name.
   var nodes = d3.values(nodesByName);
+  console.log(nodes)
+  var scale = d3.scale.linear()
+          .domain([33, 64])
+          .range([0, 600]);
 
+
+  function getSize(name) {
+    return nodesByName[name]['count'];
+  }
+  
   // Create the link lines.
   var link = svg.selectAll(".link")
       .data(links)
     .enter().append("line")
       .attr("class", "link")
-      .style("stroke", function (d) { return color[d.target.name] || "#eee" ;});
+      .style("stroke", function (d) { return getColor(d.target.name) || "#eee" ;});
 
   var cfg = {
       'group' : {
@@ -93,10 +128,10 @@ d3.csv("data.csv", function(error, links) {
 
   var circle = node.append("circle")
       .attr("class", "node")
-      .attr("r", function (d) { return cfg[d.type]['r'];})
+      .attr("r", function (d) { return getSize([d.name]);})
       .attr("stroke", function (d) { return cfg[d.type]['fill'];})
       .attr("stroke-width", 3)
-      .attr("fill", function (d) { return color[d.name] || "#eee" ;})
+      .attr("fill", function (d) { return getColor(d.name) || "#eee" ;})
       .attr("fill-opacity", function (d) { return cfg[d.type]['opacity'];})
       .call(force.drag);
 
@@ -112,12 +147,13 @@ d3.csv("data.csv", function(error, links) {
       return d.name
     });
 
-  // Start the force layout.
+  //Start the force layout.
   force
       .nodes(nodes)
       .links(links)
       .on("tick", tick)
       .start();
+
 
   function tick() {
     link
@@ -132,7 +168,13 @@ d3.csv("data.csv", function(error, links) {
   }
 
   function nodeByName(name, type) {
-    return nodesByName[name] || (nodesByName[name] = {name: name, type: type});
+    if (nodesByName[name]) {
+        nodesByName[name]['count'] += 1;
+    }
+    else {
+      nodesByName[name] = {name: name, type: type, count: 1}
+    }
+    return nodesByName[name];
   }
 });
 
